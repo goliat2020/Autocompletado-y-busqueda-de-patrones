@@ -1,34 +1,54 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <bits/stdc++.h>
 #include <fstream>
+
+namespace py = pybind11;
 using namespace std;
 
-void print(vector<int> match, string& T){
-    for(int pos : match){
-        for(int i = pos; i < pos+50; i++){
-            cout << T[i];
+set<string> uniqueWords;
+string text;
+
+class TrieNode{
+public:
+    unordered_map<char, TrieNode*> children;
+    bool isEndOfWord = false;
+};
+
+void read_file(const string& filename){
+    ifstream file(filename, ios::in | ios::binary);
+    if(!file.is_open()) return;
+
+    // reserve using file size when available
+    file.seekg(0, ios::end);
+    streamoff sz = file.tellg();
+    file.seekg(0, ios::beg);
+
+    text.clear();
+    if(sz > 0) text.reserve(static_cast<size_t>(sz));
+
+    // read whole file into text
+    text.assign(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
+    file.close();
+
+    uniqueWords.clear();
+    string word;
+    word.reserve(32);
+
+    // single pass: build lowercase alphabetic words and insert to set
+    for(unsigned char uch : text){
+        if(std::isalpha(uch)){
+            word.push_back(static_cast<char>(std::tolower(uch)));
+        } else {
+            if(!word.empty()){
+                uniqueWords.insert(word);
+                word.clear();
+            }
         }
-        cout << endl;
-        return;
     }
+    if(!word.empty()) uniqueWords.insert(word);
 }
 
-string toLowerCase(const string &s){
-    string result;
-    for(char c : s){
-        result += tolower(c);
-    }
-    return result;
-}
-
-string cleanWord(const string &s){
-    string result;
-    for(char c : s){
-        if(isalpha(c)){
-            result += c;
-        }
-    }
-    return result;
-}
 
 vector<int> lps(string P){
     int m = P.size();
@@ -84,47 +104,77 @@ vector<int> kmp(string P, const string& T){
     return match;
 }
 
-int main(){
-    string filename;
-    cout << "Enter filename: ";
-    cin >> filename;
-    cout << endl;
-    ifstream file(filename);
-    if(!file.is_open()){
-        cerr << "Error opening file" << endl;
-        return 1;
+vector<int> kmp_search(const string &pattern, const string &text){
+    return kmp(pattern, text);
+}
+
+static TrieNode* root = nullptr;
+
+TrieNode* newNode(){
+    return new TrieNode();
+}
+
+void createTrie(){
+    if(root == nullptr){
+        root = newNode();
     }
-    stringstream buffer;
-    buffer << file.rdbuf();
-    string text = buffer.str();
-    set<string> uniqueWords;
-    string line;
-
-    while(getline(file, line)){
-        stringstream ss(line);
-        string rawWord;
-
-        while(ss >> rawWord){
-            string word = cleanWord(rawWord);
-            word = toLowerCase(word);
-
-            if(!word.empty()){
-                uniqueWords.insert(word);
+    TrieNode* curr = root;
+    for(auto word : uniqueWords){
+        for(auto c : word){
+            auto it  = curr->children.find(c);
+            if(it == curr->children.end()){
+                TrieNode* child = newNode();
+                curr->children[c] = child;
+                curr = child;
+            }
+            else{
+                curr = it->second;
             }
         }
+        curr->isEndOfWord = true;
+        curr = root;
     }
-    file.close();
+}
 
-    cout << "Word to search: ";
-    string pattern;
-    cin >> pattern;
-    auto start = chrono::high_resolution_clock::now();
-    auto match = kmp(pattern, text);
-    auto end = chrono::high_resolution_clock::now();
-    auto dur = chrono::duration_cast<chrono::milliseconds>(end - start).count();
-    cout << "Word: " << pattern << " Duration (mili): " <<  dur << endl;
-    cout << "Match: " << endl;
-    print(match, text);
+void trie_collect(TrieNode* node, string &prefix, vector<string> &out, int max_results){
+    if(!node) return;
+    if((int)out.size() >= max_results) return;
+    if(node->isEndOfWord){
+        out.push_back(prefix);
+        if((int)out.size() >= max_results) return;
+    }
+    // deterministic order
+    vector<char> keys;
+    keys.reserve(node->children.size());
+    for(auto &p : node->children) keys.push_back(p.first);
+    sort(keys.begin(), keys.end());
+    for(char k : keys){
+        prefix.push_back(k);
+        trie_collect(node->children[k], prefix, out, max_results);
+        prefix.pop_back();
+        if((int)out.size() >= max_results) return;
+    }
+}
 
-    return 0;
+vector<string> autocomplete(const string &prefix, int max_results=10){
+    vector<string> out;
+    if(root == nullptr || prefix.empty() || max_results <= 0) return out;
+    TrieNode* cur = root;
+    for(auto c : prefix){
+        auto it = cur->children.find(c);
+        if(it == cur->children.end()) return out;
+        cur = it->second;
+    }
+    string p = prefix;
+    trie_collect(cur, p, out, max_results);
+    return out;
+}
+
+PYBIND11_MODULE(algorithms, m) {
+    m.doc() = "KMP search bindings";
+    m.def("read_file", &read_file, "Read entire file into a string");
+    m.def("kmp_search", &kmp_search, "Search pattern in text returning start indices");
+    m.def("createTrie", &createTrie, "Create a trie from unique words");
+    m.def("autocomplete", &autocomplete, py::arg("prefix"), py::arg("max_results")=10,
+          "Return up to max_results autocomplete suggestions for prefix");
 }

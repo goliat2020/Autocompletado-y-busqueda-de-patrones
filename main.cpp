@@ -19,7 +19,6 @@ void read_file(const string& filename){
     ifstream file(filename, ios::in | ios::binary);
     if(!file.is_open()) return;
 
-    // reserve using file size when available
     file.seekg(0, ios::end);
     streamoff sz = file.tellg();
     file.seekg(0, ios::beg);
@@ -27,7 +26,6 @@ void read_file(const string& filename){
     text.clear();
     if(sz > 0) text.reserve(static_cast<size_t>(sz));
 
-    // read whole file into text
     text.assign(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
     file.close();
 
@@ -35,7 +33,6 @@ void read_file(const string& filename){
     string word;
     word.reserve(32);
 
-    // single pass: build lowercase alphabetic words and insert to set
     for(unsigned char uch : text){
         if(std::isalpha(uch)){
             word.push_back(static_cast<char>(std::tolower(uch)));
@@ -143,7 +140,7 @@ void trie_collect(TrieNode* node, string &prefix, vector<string> &out, int max_r
         out.push_back(prefix);
         if((int)out.size() >= max_results) return;
     }
-    // deterministic order
+    
     vector<char> keys;
     keys.reserve(node->children.size());
     for(auto &p : node->children) keys.push_back(p.first);

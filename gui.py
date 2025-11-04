@@ -98,6 +98,7 @@ class App:
     def highlight_matches(self, matches, query_len):
         self.clear_highlights()
         for pos in matches[:1000]:
+            # print(pos)
             start = f"1.0+{pos}c"
             end = f"1.0+{pos + query_len}c"
             try:
@@ -150,18 +151,22 @@ class App:
 
         try:
             if algorithms_available:
+                start_time1 = time.perf_counter()
                 byte_matches = algorithms.kmp_search(q_lower, self.lower_text)
+                end_time1 = time.perf_counter()
+                duration_ms1 = (end_time1 - start_time1) * 1000
+                print(f" KMP search response(ms): ", duration_ms1)
                 if self.byte_to_char:
                     matches = [self.byte_to_char[b] if 0 <= b < len(self.byte_to_char) else len(self.lower_text)
                                for b in byte_matches]
                 else:
                     matches = [len(self.lower_text.encode('utf-8')[:b].decode('utf-8')) for b in byte_matches]
                 try:
-                    start_time = time.perf_counter()
+                    start_time2 = time.perf_counter()
                     suggestions = algorithms.autocomplete(q_lower)
-                    end_time = time.perf_counter()
-                    duration_ms = (end_time - start_time) * 1000
-                    print(f" Autocomplete response(ms): ", duration_ms)
+                    end_time2 = time.perf_counter()
+                    duration_ms2 = (end_time2 - start_time2) * 1000
+                    print(f" Autocomplete response(ms): ", duration_ms2)
 
                 except Exception:
                     suggestions = []

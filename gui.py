@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
+import time
 
 try:
     import algorithms
@@ -156,7 +157,12 @@ class App:
                 else:
                     matches = [len(self.lower_text.encode('utf-8')[:b].decode('utf-8')) for b in byte_matches]
                 try:
-                    suggestions = algorithms.autocomplete(q_lower, 10)
+                    start_time = time.perf_counter()
+                    suggestions = algorithms.autocomplete(q_lower)
+                    end_time = time.perf_counter()
+                    duration_ms = (end_time - start_time) * 1000
+                    print(f" Autocomplete response(ms): ", duration_ms)
+
                 except Exception:
                     suggestions = []
             else:

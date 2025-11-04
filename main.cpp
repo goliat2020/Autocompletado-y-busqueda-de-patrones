@@ -8,6 +8,7 @@ using namespace std;
 
 set<string> uniqueWords;
 string text;
+unordered_map<string, int> freq;
 
 class TrieNode{
 public:
@@ -16,35 +17,29 @@ public:
 };
 
 void read_file(const string& filename){
-    ifstream file(filename, ios::in | ios::binary);
-    if(!file.is_open()) return;
-
-    file.seekg(0, ios::end);
-    streamoff sz = file.tellg();
-    file.seekg(0, ios::beg);
-
-    text.clear();
-    if(sz > 0) text.reserve(static_cast<size_t>(sz));
-
-    text.assign(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
-    file.close();
+    ifstream file(filename);
+    if (!file) return;
 
     uniqueWords.clear();
+    text.assign((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+    file.close();
     string word;
-    word.reserve(32);
-
-    for(unsigned char uch : text){
-        if(std::isalpha(uch)){
-            word.push_back(static_cast<char>(std::tolower(uch)));
-        } else {
-            if(!word.empty()){
-                uniqueWords.insert(word);
-                word.clear();
-            }
+    for(char ch : text){
+        if(isalpha(static_cast<unsigned char>(ch))){
+            word += static_cast<char>(tolower(ch));
+        }
+        else if(!word.empty()){
+            uniqueWords.insert(word);
+            freq[word]++;
+            word.clear();
         }
     }
-    if(!word.empty()) uniqueWords.insert(word);
+    if(!word.empty()){
+        uniqueWords.insert(word);
+        freq[word]++;
+    }
 }
+
 
 
 vector<int> lps(string P){
@@ -133,29 +128,26 @@ void createTrie(){
     }
 }
 
-void trie_collect(TrieNode* node, string &prefix, vector<string> &out, int max_results){
+void trie_collect(TrieNode* node, string &prefix, vector<string> &out){
     if(!node) return;
-    if((int)out.size() >= max_results) return;
     if(node->isEndOfWord){
         out.push_back(prefix);
-        if((int)out.size() >= max_results) return;
     }
-    
+
     vector<char> keys;
     keys.reserve(node->children.size());
     for(auto &p : node->children) keys.push_back(p.first);
     sort(keys.begin(), keys.end());
     for(char k : keys){
         prefix.push_back(k);
-        trie_collect(node->children[k], prefix, out, max_results);
+        trie_collect(node->children[k], prefix, out);
         prefix.pop_back();
-        if((int)out.size() >= max_results) return;
     }
 }
 
-vector<string> autocomplete(const string &prefix, int max_results=10){
+vector<string> autocomplete(const string &prefix){
     vector<string> out;
-    if(root == nullptr || prefix.empty() || max_results <= 0) return out;
+    if(root == nullptr || prefix.empty()) return out;
     TrieNode* cur = root;
     for(auto c : prefix){
         auto it = cur->children.find(c);
@@ -163,15 +155,23 @@ vector<string> autocomplete(const string &prefix, int max_results=10){
         cur = it->second;
     }
     string p = prefix;
-    trie_collect(cur, p, out, max_results);
+    trie_collect(cur, p, out);
+
+    sort(out.begin(), out.end(), [](const string &a, const string &b){
+        int fa = freq.at(a);
+        int fb = freq.at(b);
+        if(fa != fb) return fa > fb;
+        return a < b;
+    });
+
     return out;
 }
 
-PYBIND11_MODULE(algorithms, m) {
+PYBIND11_MODULE(algorithms, m){
     m.doc() = "KMP search bindings";
     m.def("read_file", &read_file, "Read entire file into a string");
     m.def("kmp_search", &kmp_search, "Search pattern in text returning start indices");
     m.def("createTrie", &createTrie, "Create a trie from unique words");
-    m.def("autocomplete", &autocomplete, py::arg("prefix"), py::arg("max_results")=10,
-          "Return up to max_results autocomplete suggestions for prefix");
+    m.def("autocomplete", &autocomplete, py::arg("prefix"),
+          "Return autocomplete suggestions for prefix");
 }
